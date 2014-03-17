@@ -71,10 +71,12 @@ case $ACTION in
       chmod 666 /dev/net/tun && echo "done." || exit 1
       
       echo -n "Enabling IP forwarding...\t\t"
-      echo 1 > /proc/sys/net/ipv4/ip_forward && echo "done." || exit 1
+      if [ `cat /proc/sys/net/ipv4/ip_forward` = "0" ];  then
+          echo 1 > /proc/sys/net/ipv4/ip_forward && echo "done." || exit 1
+      fi
       
       if which iptables > /dev/null 2>&1; then
-         if ! iptables -n -t nat -L POSTROUTING | grep -q "MASQUERADE"; then
+         if ! iptables -n -t nat -L POSTROUTING | egrep -q "MASQUERADE.*0.0.0.0/0.*0.0.0.0/0"; then
             echo -n "Enabling masquerading...\t\t"
             iptables -t nat -A POSTROUTING -j MASQUERADE && echo "done." || exit 1
          fi
@@ -91,14 +93,15 @@ case $ACTION in
             echo -n "Closing firewall...\t\t\t\t"
             iptables -D FORWARD -i nk_tap_+ -j ACCEPT && echo "done." || exit 1
          fi
-         if iptables -n -t nat -L POSTROUTING | grep -q "MASQUERADE"; then
+         if iptables -n -t nat -L POSTROUTING | egrep -q "MASQUERADE.*0.0.0.0/0.*0.0.0.0/0"; then
             echo -n "Disabling masquerading...\t\t\t"
             iptables -t nat -D POSTROUTING -j MASQUERADE && echo "done." || exit 1
          fi
       fi
-      
-      echo -n "Disabling IP forwarding...\t\t\t"
-      echo 0 > /proc/sys/net/ipv4/ip_forward && echo "done." || exit 1
+
+      # Something else on the host might be wanting to ip forward too.."
+      #echo -n "Disabling IP forwarding...\t\t\t"
+      #echo 0 > /proc/sys/net/ipv4/ip_forward && echo "done." || exit 1
       
       echo "Bringing down tap devices and tunnels:"
       for INTERFACE in `cat /proc/net/dev | awk -v FS=":" '/nk_tap_/ {print $1}'`; do
